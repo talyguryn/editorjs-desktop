@@ -1,0 +1,70 @@
+{
+  "name": "editorjs-desktop",
+  "version": "0.0.0",
+  "main": "src/index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "rimraf dist/ && yarn electron:prebuild && yarn electron:build",
+    "electron:prebuild": "yarn electron:icons-gen",
+    "electron:icons-gen": "electron-icon-builder --input=./assets/icons/icon.png --output=./src/build --flatten",
+    "electron:icons-gen:postrun": "",
+    "electron:build": "electron-builder"
+  },
+  "dependencies": {
+    "@codexteam/shortcuts": "^1.2.0",
+    "@editorjs/code": "^2.7.0",
+    "@editorjs/delimiter": "^1.2.0",
+    "@editorjs/editorjs": "^2.25.0",
+    "@editorjs/embed": "^2.5.3",
+    "@editorjs/header": "^2.6.2",
+    "@editorjs/image": "^2.6.2",
+    "@editorjs/inline-code": "^1.3.1",
+    "@editorjs/link": "^2.4.0",
+    "@editorjs/list": "^1.6.2",
+    "@editorjs/marker": "^1.2.2",
+    "@editorjs/quote": "^2.4.0",
+    "@editorjs/raw": "^2.3.0",
+    "@editorjs/table": "^2.0.1",
+    "@electron/remote": "^2.0.8",
+    "arraybuffer-to-buffer": "^0.0.7",
+    "codex-notifier": "^1.1.2",
+    "electron-is-dev": "^1.2.0",
+    "electron-updater": "^4.3.5",
+    "telegraph-uploader": "^2.0.0",
+    "winston": "^3.3.3",
+    "winston-daily-rotate-file": "^4.5.0"
+  },
+  "devDependencies": {
+    "electron": "^20.1.4",
+    "electron-builder": "^23.3.3",
+    "electron-icon-builder": "^2.0.1",
+    "rimraf": "^3.0.2"
+  },
+  "build": {
+    "appId": "editorjs-desktop",
+    "productName": "Editor.js Desktop",
+    "directories": {
+      "buildResources": "src/build"
+    },
+    "mac": {
+      "category": "public.app-category.reference"
+    },
+    "dmg": {
+      "title": "Editor.js Desktop ${version}"
+    },
+    "files": [
+      "**/*"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "editorjs",
+        "name": "Editor.js Document",
+        "role": "Editor"
+      }
+    ],
+    "nsis": {
+      "perMachine": true
+    }
+  }
+}

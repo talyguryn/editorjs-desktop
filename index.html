@@ -1,0 +1,302 @@
+<html>
+<head>
+  <title>Editor.js Desktop</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+  <style>
+    body {
+      /*background-color: #eee;*/
+      font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen,Ubuntu,Cantarell,Fira Sans,Droid Sans,Helvetica Neue,sans-serif;
+    }
+
+    #editorjs {
+      margin: 2vh auto;
+      max-width: 650px;
+      min-height: 30vh;
+      background-color: #fff;
+      -webkit-box-shadow: 0px 1px 2px 1px rgba(0,0,0,0.01);
+      -moz-box-shadow: 0px 1px 2px 1px rgba(0,0,0,0.01);
+      box-shadow: 0px 1px 2px 1px rgba(0,0,0,0.01);
+      padding: 70px 90px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="editorjs"></div>
+
+  <script>
+    let noteData = {};
+    const EditorJS = require('@editorjs/editorjs');
+    const HeaderTool = require('@editorjs/header');
+    const ListTool = require('@editorjs/list');
+    const ImageTool = require('@editorjs/image');
+    const EmbedTool = require('@editorjs/embed');
+
+    const { uploadByUrl, uploadByBuffer } = require('telegraph-uploader')
+    const arrayBufferToBuffer = require('arraybuffer-to-buffer');
+
+    const editor = new EditorJS({
+      /**
+       * Id of Element that should contain Editor instance
+       */
+      holder: 'editorjs',
+
+      placeholder: 'Let`s write an awesome story!',
+
+      tools: {
+        header: HeaderTool,
+        list: ListTool,
+        image: {
+          class: ImageTool,
+          config: {
+            class: ImageTool,
+            uploader: {
+              async uploadByFile(file) {
+                return new Promise(async (resolve, reject) => {
+                  console.log(file);
+
+                  const reader = new FileReader();
+
+                  reader.addEventListener('load', async () => {
+                    const buffer = arrayBufferToBuffer(reader.result);
+                    const result = await uploadByBuffer(buffer, file.type);
+
+                    console.log(result);
+
+                    resolve({
+                      success: 1,
+                      file: {
+                        url: result.link
+                      }
+                    });
+                  }, false);
+
+                  reader.readAsArrayBuffer(file);
+                });
+
+                // return new Promise((resolve, reject) => {
+                //   const reader = new FileReader();
+                //
+                //   reader.addEventListener('load', function () {
+                //     setTimeout(() => {
+                //       resolve({
+                //         success: 1,
+                //         file: {
+                //           url: reader.result
+                //         }
+                //       });
+                //     }, 50);
+                //   }, false);
+                //
+                //   reader.readAsDataURL(file);
+                // });
+              },
+
+              uploadByUrl(url) {
+                return new Promise(async (resolve, reject) => {
+                  const result = await uploadByUrl(url);
+
+                  resolve({
+                    success: 1,
+                    file: {
+                      url: result.link
+                    }
+                  });
+                });
+
+                // return new Promise((resolve, reject) => {
+                //   setTimeout(() => {
+                //     resolve({
+                //       success: 1,
+                //       file: {
+                //         url: url
+                //       }
+                //     });
+                //   }, 50);
+                // });
+              }
+            }
+          }
+        },
+        embed: EmbedTool
+      },
+
+      /**
+       * Previously saved data that should be rendered
+       */
+      data: noteData,
+
+      autofocus: true,
+
+      onChange: () => {
+        editor.save().then((savedData) => {
+          noteData = savedData;
+        });
+      }
+    });
+
+    const getNoteName = function () {
+      const DEFAULT_NAME = 'Untitled';
+
+      if (!noteData) {
+        return DEFAULT_NAME;
+      }
+
+      const header = noteData.blocks
+        .filter(block => block.type === 'header')
+        .shift();
+
+      if (!header) {
+        return DEFAULT_NAME;
+      }
+
+      const filename = header.data.text
+        .replace(/<[^>]*>?/gm, '')
+        .replace(/&[^;]*;?/gm, '')
+        // left only letters (+cyrillic) and numbers
+        .replace(/[^a-zа-я0-9]/gi, ' ')
+        // remove multiple spaces
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/\s/g, '-');
+
+      return filename;
+    }
+  </script>
+
+  <script>
+    const { dialog } = require('@electron/remote');
+    const path = require('path');
+    const fs = require('fs');
+
+    const Shortcut = require('@codexteam/shortcuts');
+    const Notifier = require('codex-notifier');
+
+    let pathToNote;
+
+    const cmdS = new Shortcut({
+      name : 'CMD+S',
+      on : document.body,
+      callback: function(event) {
+        if (pathToNote) {
+          fs.writeFileSync(pathToNote, JSON.stringify(noteData, null, 2), 'utf-8');
+
+          const filename = path.basename(pathToNote);
+
+          updateWindowTitle(filename);
+
+          Notifier.show({
+            message: 'Saved',
+            style: 'success',
+            time: 2000
+          })
+        } else {
+          const options = {
+            title: "Save Note",
+            defaultPath : getNoteName(),
+            buttonLabel : "Save",
+
+            filters :[
+              {name: 'editorjs', extensions: ['editorjs']},
+            ]
+          };
+
+          dialog.showSaveDialog(null, options).then(({ filePath }) => {
+            pathToNote = filePath;
+
+            fs.writeFileSync(filePath, JSON.stringify(noteData, null, 2), 'utf-8');
+
+            const filename = path.basename(filePath);
+
+            updateWindowTitle(filename);
+
+            Notifier.show({
+              message: 'Saved',
+              style: 'success',
+              time: 2000
+            })
+          });
+        }
+      }
+    });
+
+    const openFile = async (filePath) => {
+      if (!filePath) {
+        return;
+      }
+
+      try {
+        const data = fs.readFileSync(filePath, 'utf-8');
+
+        await editor.isReady;
+        await editor.render(JSON.parse(data));
+
+        const filename = path.basename(filePath);
+
+        updateWindowTitle(filename);
+        pathToNote = filePath;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const cmdO = new Shortcut({
+      name : 'CMD+O',
+      on : document.body,
+      callback: function(event) {
+        const options = {
+          title: "Open Note",
+          buttonLabel : "Open",
+
+          filters :[
+            {name: 'editorjs', extensions: ['editorjs']},
+          ]
+        };
+
+        dialog.showOpenDialog(null, options).then(({ filePaths }) => {
+          console.log('filePaths', filePaths);
+
+          if (filePaths.length) {
+            const filePath = filePaths[0];
+            openFile(filePath);
+          }
+        });
+      }
+    });
+
+    const cmdN = new Shortcut({
+      name : 'CMD+N',
+      on : document.body,
+      callback: function(event) {
+        editor.render({blocks:[]});
+        updateWindowTitle();
+      }
+    });
+
+    const { ipcRenderer } = require('electron');
+
+    ipcRenderer.on('open-file', async (event, filePath) => {
+      console.info('open-file', filePath);
+
+      await openFile(filePath);
+    });
+
+    const updateWindowTitle = function (filename = 'New Note') {
+      const { BrowserWindow } = require('@electron/remote');
+      const win = BrowserWindow.getFocusedWindow();
+
+      const newTitle = `${filename} - Editor.js Notes`;
+
+      win.setTitle(newTitle);
+    }
+
+    updateWindowTitle();
+  </script>
+
+</body>
+</html>
+
